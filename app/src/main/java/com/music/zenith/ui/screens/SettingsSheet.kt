@@ -2147,15 +2147,6 @@ fun SettingsScreen(
                             context.openLink("https://www.reddit.com/r/ZenithMusic/s/gN6chb7onR")
                         },
                     )
-                    Text(
-                        text = "Telegram",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) Color.Black else Color.White,
-                        textDecoration = TextDecoration.Underline,
-                        modifier = Modifier.clickable {
-                            context.openLink("https://t.me/+8ECIhA8_kdkwZWU1")
-                        },
-                    )
                 }
                 Text(
                     text = "Made by Zeuxxi",

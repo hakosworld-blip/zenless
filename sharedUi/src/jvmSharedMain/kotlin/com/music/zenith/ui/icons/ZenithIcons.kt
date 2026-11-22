@@ -25,7 +25,7 @@ val LocalShareIcon = staticCompositionLocalOf { ZenithIcons.Share }
 val LocalCloseIcon = staticCompositionLocalOf { ZenithIcons.Close }
 
 /**
- * Thick-stroke, round-capped icons in the spirit of Telegram's modern icon set.
+ * Thick-stroke, round-capped icons in the spirit of modern chat-app icon sets.
  * Drawn as strokes so the 2.2px weight + round joins read as a single polished
  * family. Tint is applied by [androidx.compose.material3.Icon].
  *
