@@ -1,0 +1,292 @@
+/*
+ * The glass rendering itself is Kyant0/backdrop (Apache-2.0), vendored at
+ * [com.music.zenith.ui.components.backdrop] — see that package for the
+ * upstream attribution. This file is the integration glue, adapted from
+ * EchoMusicApp/Echo-Music's GlassEffectConfig/Modifier.liquidGlass
+ * (GPL-3.0), cut down from Echo's full per-component/vibrancy-slider config
+ * to the single on/off switch Zenith exposes in Settings. It is used by the
+ * floating nav bar and, while enabled, the app-wide floating top controls.
+ */
+package com.music.zenith.ui.components
+
+import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalDensity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.music.zenith.data.settings.AppSettings
+import com.music.zenith.data.settings.GlassClarity
+import com.music.zenith.data.settings.GlassCustom
+import com.music.zenith.ui.components.backdrop.Backdrop
+import com.music.zenith.ui.components.backdrop.backdrops.LayerBackdrop
+import com.music.zenith.ui.components.backdrop.drawBackdrop
+import com.music.zenith.ui.components.backdrop.effects.blur
+import com.music.zenith.ui.components.backdrop.effects.colorControls
+import com.music.zenith.ui.components.backdrop.effects.lens
+import com.music.zenith.ui.components.backdrop.highlight.Highlight
+import com.music.zenith.ui.components.backdrop.highlight.HighlightElement
+import com.music.zenith.ui.components.backdrop.internal.ShapeProvider
+import com.music.zenith.ui.components.backdrop.shadow.Shadow
+import androidx.compose.ui.unit.dp
+
+/** Whether the liquid glass nav bar is turned on — see [AppSettings.liquidGlass]. */
+val LocalLiquidGlassEnabled = staticCompositionLocalOf { false }
+
+/** The backdrop content (app UI) that a liquid glass surface samples from. */
+val LocalAppBackdrop = staticCompositionLocalOf<Backdrop> { error("No AppBackdrop provided") }
+
+/**
+ * Backdrop yang dipakai panel menu yang sedang terbuka (still player, atau still
+ * halaman). Null di luar menu. Dialog di window sendiri yang dibuka dari isi menu,
+ * seperti Song Info, memakainya supaya blur-nya mengambil latar yang sama dengan
+ * menu itu, bukan [LocalAppBackdrop] yang merekam halaman utama di bawah player.
+ */
+internal val LocalMenuBackdrop = compositionLocalOf<Backdrop?> { null }
+
+/**
+ * Where a [liquidGlass] surface composed under it also records the glass it
+ * draws — the sampled, blurred and tinted backdrop, without its rim or shadow —
+ * so a lens above it can refract that surface rather than the page behind it.
+ * The tab bar's travelling selection pill is the one reader; see
+ * [com.music.zenith.ui.components.floatingtabbar.GlassSelectionPill].
+ */
+internal val LocalGlassExport = compositionLocalOf<LayerBackdrop?> { null }
+
+/**
+ * The backdrop blur pipeline requires [android.graphics.RenderEffect] on a
+ * [android.graphics.RenderNode], available from Android 12 (API 31).
+ */
+fun isGlassSupported(sdkInt: Int = Build.VERSION.SDK_INT): Boolean = sdkInt >= Build.VERSION_CODES.S
+
+private const val BLUR_RADIUS_DP = 10f
+private const val LENS_HEIGHT = 0.5f
+private const val LENS_AMOUNT = 0.5f
+private const val LENS_MAX_DP = 48f
+private const val SURFACE_OPACITY = 0.30f
+
+/**
+ * The hairline along a bar's edge, and what stands in for the glass rim
+ * wherever the glass itself is not drawn.
+ *
+ * A surface filled with the theme's own `surface` colour has no edge of its own
+ * against a dark page — it is the same near-black the page is. The glass gets
+ * its edge from [Highlight], and this is that edge for everything that does not.
+ */
+internal val GLASS_EDGE_WIDTH = 0.5.dp
+internal val GLASS_EDGE_COLOR = Color.White.copy(alpha = 0.10f)
+
+/**
+ * Icon and label colour for content sitting on a glass surface.
+ *
+ * Glass shows whatever is behind it rather than the theme's surface colour, so
+ * the usual onSurface greys have nothing dependable to sit against. Pure black
+ * or white off the theme's luminance is the only tint that holds against
+ * arbitrary artwork, and it is what Echo's own glass nav bar uses.
+ */
+@Composable
+fun glassContentColor(): Color =
+    if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) Color.Black else Color.White
+
+/**
+ * Selected-tab indicator colour for a glass surface: white in both themes.
+ *
+ * In light theme that is the inverse of [glassContentColor], a bright lift
+ * behind a dark glyph. In dark theme it is a faint white lift over the bar's
+ * dark glass rather than a black scrim pressed into it — the selected tab is
+ * raised out of the bar, as on iOS, not sunk.
+ */
+@Composable
+fun glassIndicatorColor(): Color =
+    if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
+        Color.White.copy(alpha = LIGHT_INDICATOR_OPACITY)
+    } else {
+        Color.White.copy(alpha = DARK_INDICATOR_OPACITY)
+    }
+
+/** The selected tab's pill in dark theme, a step whiter than the bar. */
+private const val DARK_INDICATOR_OPACITY = 0.30f
+
+/** The selected tab's pill in light theme. */
+private const val LIGHT_INDICATOR_OPACITY = 0.65f
+
+/**
+ * A lightweight visual match for liquid glass over a stable background.
+ *
+ * This keeps the same translucent tint, directional highlight and hairline as
+ * [liquidGlass], but intentionally performs no backdrop capture, blur, lens
+ * refraction or shadow rendering. When Liquid Glass is disabled or unsupported,
+ * [fallbackColor] preserves the control's existing filled appearance.
+ */
+@Composable
+fun Modifier.lightweightLiquidGlass(
+    shape: CornerBasedShape,
+    fallbackColor: Color,
+): Modifier {
+    val useGlass = LocalLiquidGlassEnabled.current && isGlassSupported()
+    val glassTint = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) {
+        Color(0xFFFAFAFA)
+    } else {
+        Color(0xFF121212)
+    }
+    val shapeProvider = ShapeProvider { shape }
+    val custom by AppSettings.glassCustom.collectAsStateWithLifecycle()
+    val highlightSpec = remember(custom.rim) { Highlight.Default.copy(alpha = custom.rim) }
+
+    return clip(shape)
+        .background(
+            color = if (useGlass) {
+                glassTint.copy(alpha = (SURFACE_OPACITY * custom.tint).coerceIn(0f, 1f))
+            } else {
+                fallbackColor
+            },
+            shape = shape,
+        )
+        .then(
+            if (useGlass) {
+                HighlightElement(
+                    shapeProvider = shapeProvider,
+                    highlight = { highlightSpec },
+                )
+            } else {
+                Modifier
+            },
+        )
+        .border(GLASS_EDGE_WIDTH, GLASS_EDGE_COLOR, shape)
+}
+
+/**
+ * Just the rim of liquid glass — the directional [Highlight] that catches the
+ * light along a glass edge — for a control that keeps its own fill.
+ *
+ * Over a flat, stable page the blur and lens of [liquidGlass] would sample a
+ * single colour and change nothing a reader could see; the rim is the part
+ * that reads as glass. No backdrop capture, so it costs a stroke. Nothing at
+ * all while Liquid Glass is off or unsupported.
+ */
+@Composable
+fun Modifier.liquidGlassRim(shape: CornerBasedShape): Modifier {
+    if (!LocalLiquidGlassEnabled.current || !isGlassSupported()) return this
+    val shapeProvider = remember(shape) { ShapeProvider { shape } }
+    val custom by AppSettings.glassCustom.collectAsStateWithLifecycle()
+    val highlightSpec = remember(custom.rim) { Highlight.Default.copy(alpha = custom.rim) }
+    return then(
+        HighlightElement(
+            shapeProvider = shapeProvider,
+            highlight = { highlightSpec },
+        ),
+    )
+}
+
+/**
+ * Renders this composable as a liquid glass surface sampling [LocalAppBackdrop]:
+ * vibrancy, blur and lens refraction, then a theme-adaptive surface tint (light
+ * glass on light theme, dark on dark). Returns the receiver unchanged on devices
+ * without RenderEffect support — callers should still gate on [isGlassSupported]
+ * to fall back to the regular Haze treatment there.
+ *
+ * Under "reduce dynamic blur" the surface is filled solid instead, which is what
+ * that setting promises everywhere else in the app. It is checked here rather
+ * than at each call site so there is one answer to it: [MainActivity] also stops
+ * recording the backdrop layer when it is on, and a surface that still tried to
+ * sample would be sampling a layer nothing is drawing into.
+ *
+ * [shape] is restricted to [CornerBasedShape] because the backdrop's lens effect
+ * throws for any other shape type.
+ */
+@Composable
+fun Modifier.liquidGlass(
+    shape: CornerBasedShape,
+    /** Drawn over the glass in place of the theme's default tint, when set. */
+    surfaceTint: Color? = null,
+    /** False keeps the blur, tint and rim but skips the lens that bends what is behind. */
+    refract: Boolean = true,
+    /** Sampled in place of [LocalAppBackdrop], for glass over something the page behind is not. */
+    source: Backdrop? = null,
+    /** Replaces the app-wide glass clarity for this surface only, when set. */
+    clarityOverride: GlassClarity? = null,
+    /** Replaces the app-wide custom glass values for this surface only, when set. */
+    customOverride: GlassCustom? = null,
+    /** Replaces the app-wide frosted setting for this surface only, when set. */
+    frostedOverride: Boolean? = null,
+): Modifier {
+    if (!isGlassSupported()) return this
+    val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+    val appFrosted by AppSettings.frostedGlass.collectAsStateWithLifecycle()
+    val appClarity by AppSettings.glassClarity.collectAsStateWithLifecycle()
+    val appCustom by AppSettings.glassCustom.collectAsStateWithLifecycle()
+    val frosted = frostedOverride ?: appFrosted
+    val clarity = clarityOverride ?: appClarity
+    val custom = customOverride ?: appCustom
+    if (reduceDynamicBlur) {
+        return background(MaterialTheme.colorScheme.surface, shape)
+            .border(GLASS_EDGE_WIDTH, GLASS_EDGE_COLOR, shape)
+    }
+    val backdrop = source ?: LocalAppBackdrop.current
+    val exportedBackdrop = if (source == null) LocalGlassExport.current else null
+    val density = LocalDensity.current
+    val resolution = (clarity.resolutionScale * custom.quality).coerceIn(0.2f, 1f)
+    val blurPx = with(density) { BLUR_RADIUS_DP.dp.toPx() } * resolution * clarity.blurScale * custom.blur
+    val lensHeightPx = with(density) { (LENS_HEIGHT * LENS_MAX_DP).dp.toPx() } * resolution * custom.refractionWidth
+    val lensAmountPx = with(density) { (LENS_AMOUNT * LENS_MAX_DP).dp.toPx() } * resolution *
+        clarity.lensScale * custom.refraction
+    val rainbowStrength = custom.rainbowStrength(clarity.chromatic)
+    val highlightSpec = remember(custom.rim) { Highlight.Default.copy(alpha = custom.rim) }
+    val isLightTheme = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+    val shadowSpec = remember(custom.shadow, isLightTheme) {
+        // A light page has nothing darker behind the bar, so the shadow sets it apart.
+        val base = if (isLightTheme) 0.18f else 0.1f
+        Shadow.Default.copy(color = Color.Black.copy(alpha = (base * custom.shadow).coerceIn(0f, 1f)))
+    }
+    val themeTint = if (isLightTheme) {
+        Color(0xFFF2F2F7)
+    } else {
+        Color(0xFF121212)
+    }
+    val tintAlpha = (clarity.tintAlpha * custom.tint).coerceIn(0f, 1f)
+    // White glass over a white page is invisible, so light theme keeps a minimum fill.
+    val surfaceTintColor = surfaceTint
+        ?: themeTint.copy(alpha = if (isLightTheme) maxOf(tintAlpha, 0.6f) else tintAlpha)
+    // White 10% vanishes against a light page; use a dark hairline there.
+    val edgeColor = if (isLightTheme) {
+        Color.Black.copy(alpha = 0.12f)
+    } else {
+        GLASS_EDGE_COLOR
+    }
+
+    return drawBackdrop(
+        backdrop = backdrop,
+        shape = { shape },
+        effects = {
+            // Frosted: hanya saturasi ringan + blur, tanpa lensa (bagian terberat di GPU).
+            colorControls(saturation = (if (frosted) 1.15f else clarity.saturation) * custom.saturation)
+            blur(if (frosted) blurPx * 1.4f else blurPx)
+            if (!frosted && refract && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                lens(
+                    refractionHeight = lensHeightPx,
+                    refractionAmount = lensAmountPx,
+                    depthEffect = custom.depth,
+                    chromaticAberration = rainbowStrength > 0f,
+                    chromaticStrength = rainbowStrength,
+                )
+            }
+        },
+        highlight = { highlightSpec },
+        shadow = { if (frosted && !isLightTheme) null else shadowSpec },
+        onDrawSurface = {
+            drawRect(color = surfaceTintColor, size = size)
+        },
+        exportedBackdrop = exportedBackdrop,
+        backdropScale = resolution,
+    ).border(GLASS_EDGE_WIDTH, edgeColor, shape)
+}
