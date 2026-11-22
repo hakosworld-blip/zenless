@@ -1178,6 +1178,7 @@
     <string name="song_info_sample">샘플</string>
     <string name="footer_github">GitHub</string>
     <string name="footer_developer">개발자</string>
+    <string name="footer_version">zenless %1$s</string>
     <string name="signed_by">%1$s 서명</string>
     <string name="find_your_mood">기분에 맞는 음악 찾기</string>
     <string name="no_audio_version">이 동영상의 오디오 버전을 찾지 못했어요</string>

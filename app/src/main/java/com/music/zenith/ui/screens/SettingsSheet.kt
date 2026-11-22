@@ -2116,7 +2116,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Zenith $version",
+                        text = stringResource(R.string.footer_version, version),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -2136,15 +2136,6 @@ fun SettingsScreen(
                         textDecoration = TextDecoration.Underline,
                         modifier = Modifier.clickable {
                             context.openLink("https://github.com/rezapranata089-bit")
-                        },
-                    )
-                    Text(
-                        text = "Reddit",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) Color.Black else Color.White,
-                        textDecoration = TextDecoration.Underline,
-                        modifier = Modifier.clickable {
-                            context.openLink("https://www.reddit.com/r/ZenithMusic/s/gN6chb7onR")
                         },
                     )
                 }

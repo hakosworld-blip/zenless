@@ -114,11 +114,11 @@ object AppUpdateChecker {
      * One release carries the phone app and the TV app, each as a universal
      * APK plus per-ABI splits:
      *
-     *     Zenith-v1.8.apk     Zenith-v1.8_arm64-v8a.apk     ...
-     *     ZenithTV-v1.8.apk   ZenithTV-v1.8_arm64-v8a.apk   ...
+     *     zenless-v1.8.apk      zenless-v1.8_arm64-v8a.apk      ...
+     *     zenlessTV-v1.8.apk    zenlessTV-v1.8_arm64-v8a.apk    ...
      *
      * so this app's APKs are the ones named with its own
-     * [BuildConfig.UPDATE_APK_PREFIX] — "Zenith-" never matches a TV file,
+     * [BuildConfig.UPDATE_APK_PREFIX] — "zenless-" never matches a TV file,
      * since the prefix ends at the hyphen. The universal build (no `_ABI`
      * suffix) is taken first, as it installs anywhere; failing that, the split
      * for this device's ABI. A release with neither leaves

@@ -1407,6 +1407,7 @@
     <!-- Settings: Zenith for Wear OS -->
     <string name="footer_github">GitHub</string>
     <string name="footer_developer">Developer</string>
+    <string name="footer_version">zenless %1$s</string>
     <string name="signed_by">Signed by %1$s</string>
     <string name="find_your_mood">Find Your Mood</string>
     <string name="no_audio_version">No audio version found for this video</string>

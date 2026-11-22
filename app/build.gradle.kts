@@ -122,7 +122,7 @@ android {
         // AppUpdateChecker.apkAssetUrl.
         buildConfigField("String", "CANVAS_SECRET", "\"$canvasSecret\"")
         buildConfigField("String", "DEBUG_SECRET", "\"${debugSecret.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
-        buildConfigField("String", "UPDATE_APK_PREFIX", "\"Zenith-\"")
+        buildConfigField("String", "UPDATE_APK_PREFIX", "\"zenless-\"")
         buildConfigField("String", "UPDATE_REPO", "\"${updateRepo.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
     }
 

@@ -133,7 +133,7 @@ jobs:
             VER="build-$GITHUB_RUN_NUMBER"
           fi
           mkdir -p dist
-          cp app/build/outputs/apk/prod/release/*.apk "dist/Zenith-${VER}.apk"
+          cp app/build/outputs/apk/prod/release/*.apk "dist/zenless-${VER}.apk"
           ls -lh dist
 
       - name: Publish GitHub Release

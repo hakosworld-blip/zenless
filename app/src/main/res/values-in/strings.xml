@@ -1397,6 +1397,7 @@
     <string name="onboarding_back">Kembali</string>
     <string name="footer_github">GitHub</string>
     <string name="footer_developer">Pengembang</string>
+    <string name="footer_version">zenless %1$s</string>
     <string name="signed_by">Ditandatangani oleh %1$s</string>
     <string name="song_info">Info lagu</string>
     <string name="song_info_album">Album</string>
