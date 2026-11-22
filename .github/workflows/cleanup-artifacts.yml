@@ -1,5 +1,5 @@
-name: "▒▒▒▒▒▒▒▒"
-run-name: "▒▒▒▒"
+name: "Cleanup Artifacts"
+run-name: "Cleanup artifacts and old runs"
 
 on:
   schedule:
